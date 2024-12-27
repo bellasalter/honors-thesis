@@ -1,0 +1,49 @@
+---
+title: "R Notebook"
+output: html_notebook
+---
+
+```{r}
+library('rvest')
+
+team_abbrevs <- c("ANA", "ARI", "BOS", "BUF", "CGY", "CAR", "CHI", "COL", "CBJ", "DAL", "DET", "EDM", "FLA", "LAK", "MIN", "MTL", "NSH", "NJD", "NYI", "NYR", "OTT", "PHI", "PIT", "SJS", "STL", "TBL", "TOR", "VAN", "WSH", "WPG")
+
+curr_url = "https://www.hockey-reference.com/boxscores/202310100TBL.html"
+game = "202310100TBL"
+
+site_info <- read_html(curr_url)
+team_info <- html_nodes(site_info, "#scoring tr a")
+team_info
+
+time_info <- c(html_text(html_nodes(site_info, "#scoring tr .right")))
+game = rep(game, length(time_info))
+
+
+just_team = FALSE
+scorer = c()
+teams = c()
+count = 0
+for(val in team_info) {
+  if(val %in% time_info) {
+    count = count + 1
+  } else {
+    if(just_team) {
+      scorer = c(scorer, val)
+      just_team = FALSE
+    } else {
+      if(val %in% team_abbrevs) {
+        just_team = TRUE
+        teams = c(teams, val)
+      }
+    }
+  }
+}
+
+print(count)
+
+
+
+```
+
+
+

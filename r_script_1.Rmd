@@ -1,0 +1,237 @@
+---
+title: "R Notebook"
+output: html_notebook
+---
+
+
+```{r, message=FALSE}
+library(tidyverse)
+library(caTools)
+source("data_processing.R")
+source("hockey_game_utils.R")
+
+game_ids <- get_game_ids("shift_data")
+```
+```{r}
+schedule_info <- read_csv("./nhl_schedule.csv")
+game_ids_df<- data.frame(game_ids)
+game_ids_df$yr <- substring(game_ids_df$game_ids, 1, 4)
+game_ids_df
+
+yrs <- c("2012")
+for(yr in yrs) {
+  curr_yr_ids <- game_ids_df[game_ids_df$yr == yr,]$game_ids
+  get_all_info(yr, curr_yr_ids)
+}
+
+
+```
+```{r}
+roster_files <- list.files(path = "player_data", 
+                          pattern = "\\.csv$",
+                          recursive = TRUE,
+                          full.names = TRUE)
+
+# Read and combine all files, adding year information
+complete_roster <- roster_files %>%
+  map_df(~{
+    # Extract year from the file path
+    year <- basename(dirname(.x))
+    
+    df <- read_csv(.x, show_col_types = FALSE)
+    df$year <- year
+    return(df)
+  }) %>%
+  # Reorder columns to put year first
+  select(year, everything())
+
+```
+
+```{r, message=FALSE}
+
+
+```
+
+```{r}
+# get info from csvs
+yrs <- c("2012")
+count <- 0
+for(yr in yrs) {
+  if(count == 0) {
+    big_player_df <- read_csv(sprintf("./%s_df/big_player_df.csv", yr))
+  } else {
+    big_player_df <- rbind(big_player_df, read_csv(sprintf("./{yr}_df/big_player_df.csv")))
+  }
+}
+```
+```{r}
+big_player_df
+shift_changes <- giant_df[giant_df$type == "shift-change",]
+shift_changes[shift_changes$playerIDs %like% "8474037", ]
+length(unique(shift_changes$yr))
+
+get_player_profile(giant_df, big_player_df, "8474037")
+```
+```{r}
+player_counts_df <- big_player_df %>% group_by(Szn, PlayerId, tmAbbrev, shootsCatches, Pos) %>%
+  summarise(across(c(SOG, Wrist, Slap, Snap, Tip, Deflect, Missed, Blocked, Goals, Hits), sum))
+```
+```{r}
+
+team_counts_df <- big_team_df %>% group_by(Szn, tmAbbrev) %>%
+  summarise(across(c(W,L, SOG, Wrist, Slap, Snap, Tip, Deflect, Missed, Blocked, Goals), sum))
+
+team_counts_df$WristP <- team_counts_df$Wrist / team_counts_df$SOG
+team_counts_df$SlapP <- team_counts_df$Slap / team_counts_df$SOG
+team_counts_df$TipP <- team_counts_df$Tip / team_counts_df$SOG
+team_counts_df$SnapP <- team_counts_df$Snap / team_counts_df$SOG
+
+vars_col <- c()
+means_col <- c()
+for(r in c(1:nrow(team_counts_df))) {
+  row <- team_counts_df[r,]
+  curr_vars <- sd(c(row$WristP, row$SnapP, row$SlapP, row$TipP))
+  vars_col <- c(vars_col, curr_vars)
+  
+  curr_mean <- (row$Tip + (2*row$Wrist) + (3*row$Snap) + (4*row$Slap)) / (row$Tip + row$Wrist + row$Snap + row$Slap)
+  means_col <- c(means_col, curr_mean)
+}
+
+team_counts_df$shot_var <- vars_col
+team_counts_df$means <- means_col
+tot_mean <- mean(team_counts_df$means)
+mn_var <- mean(team_counts_df$shot_var)
+
+relMeans <- c()
+relMeans2 <- c()
+for(r in c(1:nrow(team_counts_df))) {
+  row <- team_counts_df[r,]
+  curr_mean_diff <- row$means - tot_mean
+  relMeans <- c(relMeans, curr_mean_diff)
+  
+  curr_var_diff <- row$shot_var - mn_var
+  relMeans2 <- c(relMeans2, curr_var_diff)
+}
+
+team_counts_df$relMean <- relMeans
+team_counts_df$relVar <- relMeans2
+
+
+team_counts_df
+```
+```{r}
+
+team_counts_df$WP <- team_counts_df$W / (team_counts_df$W + team_counts_df$L)
+team_counts_df$SOG.G <- team_counts_df$SOG / (team_counts_df$W + team_counts_df$L)
+
+ggplot(team_counts_df, aes(x=Goals, y=W)) +geom_point() + xlab("Goals") + ylab("Wins")
+```
+```{r}
+winModLin <- lm(team_counts_df$Goals ~ I(team_counts_df$relMean^2) + I(team_counts_df$shot_var^0.5))
+summary(winModLin)
+```
+```{r}
+player_goals_df <- player_counts_df[player_counts_df$Goals != 0,]
+
+team_sds_df <- player_goals_df %>% group_by(Szn, tmAbbrev) %>%
+  summarise(across(c(SOG, Wrist, Slap, Snap, Tip, Deflect, Missed, Blocked, Goals), sd))
+
+
+new_col <- c()
+new_col_goals <- c()
+for(r in c(1:nrow(team_sds_df))) {
+  row <- team_sds_df[r,]
+  
+  new_col <- c(new_col, team_counts_df[team_counts_df$tmAbbrev == row$tmAbbrev,]$W)
+  new_col_goals <- c(new_col_goals, team_counts_df[team_counts_df$tmAbbrev == row$tmAbbrev,]$Goals)
+}
+
+colnames(team_sds_df) <- c("Szn", "tmAbbrev", "SOG_sd", "Wrist_sd", "Slap_sd", "Snap_sd", "Tip_sd", "Deflect_sd", "Missed_sd", "Blocked_sd", "Goals_sd")
+team_sds_df$W <- new_col
+team_sds_df$Goals <- new_col_goals
+ggplot(team_sds_df, aes(x=Slap_sd, y=Goals)) + geom_point() + xlab("Variance in Number of Slapshots") + ylab("Goals")
+```
+```{r}
+print(select(team_sds_df, -c(Szn, tmAbbrev)))
+
+sd_model <- lm(W ~ Slap_sd + SOG_sd + Wrist_sd +Snap_sd, data=team_sds_df)
+summary(sd_model)
+```
+```{r}
+player_counts_df <- na.omit(player_counts_df[-1,])
+player_counts_df
+```
+```{r}
+train_df <- player_counts_df[player_counts_df$Pos != "D" & player_counts_df$Pos != "G",]
+train_df <- subset(train_df, select = -c(Szn,tmAbbrev, PlayerId, Pos, shootsCatches))
+print(train_df)
+```
+```{r}
+library(dbscan)
+#trainIndex <- createDataPartition(train_df$SOG, 
+								  #times=1, 
+								  #p = .8, 
+								  #list = FALSE)
+#train <- subset(train_df[trainIndex, ], select=-c(PlayerId))
+#test <- subset(train_df[-trainIndex, ], select=-c(PlayerId))
+
+# knn model
+prep_obj <- preProcess(train_df, method = c('center', 'scale'))
+trainTransformed <- predict(prep_obj, train_df)
+#testTransformed <- predict(prep_obj, test)
+
+# Find optimal k using elbow method
+wss <- numeric(10)
+for (k in 1:10) {
+    km <- kmeans(trainTransformed, centers=k)
+    wss[k] <- km$tot.withinss
+}
+
+# Plot elbow curve
+elbow_data <- data.frame(k = 1:10, wss = wss)
+elbow_plot <- ggplot(elbow_data, aes(x=k, y=wss)) +
+    geom_line() +
+    geom_point() +
+    labs(
+        title="Elbow Method for Optimal k",
+        x="Number of Clusters (k)",
+        y="Within-cluster Sum of Squares"
+    ) +
+    theme_minimal()
+print(elbow_plot)
+
+optimal_k <- 3
+
+
+final_clusters <- kmeans(trainTransformed, centers=optimal_k)
+
+
+data_with_clusters <- train_df %>%
+    mutate(class = as.factor(final_clusters$cluster))
+
+
+cluster_plot <- ggplot(data_with_clusters, aes(x=Hits, y=SOG, color=class)) +
+    geom_point(size=3, alpha=0.6) +
+    scale_color_brewer(palette="Set1") +
+    labs(
+        title="K-means Clustering Results",
+        x="X",
+        y="Y",
+        color="Cluster"
+    ) +
+    theme_minimal()
+print(cluster_plot)
+
+
+head(data_with_clusters)
+```
+```{r}
+
+res_df <- player_counts_df[player_counts_df$Pos != "D" & player_counts_df$Pos != "G",]
+res_df$class <- final_clusters$cluster
+# let's take a look at Nugent-Hopkins-McDavid-Hyman
+nugent_hopkins <- res_df[res_df$PlayerId == "8476454",]
+mcdavid <- res_df[res_df$PlayerId == "8478402",]
+hyman <- res_df[res_df$PlayerId == "8475786",]
+print(nugent_hopkins$class)
+```
