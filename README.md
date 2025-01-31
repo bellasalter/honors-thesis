@@ -10,8 +10,7 @@
 ### Necessary Files
 
 #### Data Files Generated
-* **combined_seasons.csv file** contains the rosters for every season in our dataset. 
-    - headers 
+
 * **play_data/ folder** stores the data for each play of every game. Contains folders named for each year, which each contain CSVs for games titled as the game id, i.e. play_data/2011/2011010001.csv. 
     - CSVs contain headers eventId,periodDescriptor,timeInPeriod,timeRemaining,situationCode,homeTeamDefendingSide,typeCode,typeDescKey,sortOrder,details,pptReplayUrl
     - note that the names are the consistent with the official game ids given by the NHL: [see game 2011010001 here](https://www.nhl.com/gamecenter/buf-vs-car/2011/09/19/2011010001).
