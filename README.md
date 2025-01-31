@@ -38,6 +38,7 @@
     - Runtime is not very significant, but data files are still already provided. 
 
 3. **consolidate.py** consolidates the roster data for each year into one csv, from the preliminary data that **getAllPlayers.py** generated.
+    - end state: **all_seasons_rosters.csv** created and contains roster information for every year in the dataset.
     - Runtime is not very significant, but data files are still already provided. 
 
 ## 2. Data Processing in R
