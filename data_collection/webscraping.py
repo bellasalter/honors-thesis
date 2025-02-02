@@ -27,7 +27,7 @@ def get_box_data(gameID, year, firstBox) :
     
     if firstBox == 0:
         #print(firstBox)
-        os.mkdir(f'./play_data/{year}', )
+        os.mkdir(f'data_collection/play_data/{year}', )
 
     goals = r.json()['plays']
     #for row in r.json()['plays'] :
@@ -38,7 +38,7 @@ def get_box_data(gameID, year, firstBox) :
 
 
 
-    with open(f'play_data/{year}/{gameID}.csv', 'w', newline='') as csvfile:
+    with open(f'data_collection/play_data/{year}/{gameID}.csv', 'w', newline='') as csvfile:
         fieldnames = ['eventId', 'periodDescriptor', 'timeInPeriod', 'timeRemaining', 'situationCode', 'homeTeamDefendingSide', 'typeCode', 'typeDescKey', 'sortOrder', 'details', 'pptReplayUrl']
         writer = csv.DictWriter(csvfile, fieldnames=fieldnames)
         writer.writeheader()
@@ -60,11 +60,11 @@ def get_shift_data(gameID, year, first) :
         return [0,0]
     
     if first == 0:
-        os.mkdir(f'./shift_data/{year}', )
+        os.mkdir(f'data_collection/shift_data/{year}', )
     
     #goals = [row for row in r.json()['data'] if row["typeDesc
 
-    with open(f'shift_data/{year}/{gameID}.csv', 'w', newline='') as csvfile:
+    with open(f'data_collection/shift_data/{year}/{gameID}.csv', 'w', newline='') as csvfile:
         fieldnames = ['gameId','teamAbbrev','firstName', 'lastName', 'period','startTime', 'endTime', 'shiftNumber', 'eventDescription', 'eventDetails', 'typeCode', 'teamId', 'hexValue', 'detailCode', 'playerId', 'teamName', 'id', 'teamAbbrev', 'eventNumber', 'duration']
         writer = csv.DictWriter(csvfile, fieldnames=fieldnames)
         writer.writeheader()
