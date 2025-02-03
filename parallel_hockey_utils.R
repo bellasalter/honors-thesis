@@ -5,14 +5,16 @@ library(tidyr)
 library(hash)
 
 large_df_rows <- 5000
-team_info_colnames <- c("Szn", "tmAbbrev", "W", "L", "SOG", "Wrist", "Slap", "Snap", "Tip", "Deflect", "Missed", "Blocked", "Goals")
+team_info_colnames <- c("Szn", "TmAbbrev", "W", "L", "SOG", "Wrist", "Slap", "Snap", "Tip", "Deflect", "Missed", "Blocked", "Goals")
 play_info_colnames <- c("PlayerId","Pos", "Szn", "TmAbbrev", "SOG", "Wrist", "Slap", "Snap", "Tip", "Deflect", "Missed", "Blocked", "Goals")
-complete_roster <- read_csv("./player_data/all_seasons_rosters.csv")
+complete_roster <- read_csv("data_collection/player_data/all_seasons_rosters.csv")
 res_out_colnames<- c("Szn", "GameID", "TOI", "TmAbbrev", "NumPlayers", "PlayerIds", "SitCode", "TypeCode", "ZoneCode", "Details")
 num_cores <- parallel::detectCores() - 1
 
 do_primary_collection <- function() {
-  schedule_info <- read_csv("./nhl_schedule.csv")
+  game_ids <- get_game_ids("data_collection/shift_data")
+
+  #schedule_info <- read_csv("./nhl_schedule.csv")
   game_ids_df<- data.frame(game_ids)
   game_ids_df$yr <- substring(game_ids_df$game_ids, 1, 4)
   
@@ -203,8 +205,8 @@ get_all_info_parallel <- function(year, fns, debug=FALSE) {
                        
       year_substr <- substring(game, 1, 4)
       
-      shift_path <- sprintf("shift_data/%s/%s", year_substr, game)
-      play_path <- sprintf("play_data/%s/%s", year_substr, game)
+      shift_path <- sprintf("data_collection/shift_data/%s/%s", year_substr, game)
+      play_path <- sprintf("data_collection/play_data/%s/%s", year_substr, game)
       
       if(!file.exists(shift_path) || !file.exists(play_path)) {
         return(NULL)
@@ -292,16 +294,17 @@ get_all_info_parallel <- function(year, fns, debug=FALSE) {
   unregister_dopar()
   
   print(sprintf("Calculating aggregate statistics...."))
+
   player_agg <- agg_stats(results, year)
   #team_agg <- agg_stats_team(player_agg)
   
-  file.create(sprintf("./%s_df/player_agg_df.csv", year))
+  file.create(sprintf("data_processing/%s_player_agg_df.csv", year))
   #file.create(sprintf("./%s_df/team_agg_df.csv", year))
-  file.create(sprintf("./%s_df/everything.csv", year))
+  file.create(sprintf("./%s_everything_df.csv", year))
   
-  write.csv(player_agg, file=sprintf("./%s_df/player_agg_df.csv", year))
+  write.csv(player_agg, file=sprintf("data_processing/%s_player_agg_df.csv", year))
   #write.csv(team_agg, file=sprintf("./%s_df/team_agg_df.csv", year))
-  write.csv(results, file=sprintf("./%s_df/everything.csv", year))
+  write.csv(results, file=sprintf("./%s_everything_df.csv", year))
   
   if(debug) {
     print(results)

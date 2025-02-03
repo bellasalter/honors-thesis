@@ -2,7 +2,7 @@ library(data.table)
 team_info_colnames <- c("Szn", "tmAbbrev", "W", "L", "SOG", "Wrist", "Slap", "Snap", "Tip", "Deflect", "Missed", "Blocked", "Goals")
 play_info_colnames <- c("PlayerId","Pos", "Szn", "tmAbbrev", "SOG", "Wrist", "Slap", "Snap", "Tip", "Deflect", "Missed", "Blocked", "Goals")
 new_play_colnames <- c("PlayerId","Pos", "Szn", "tmAbbrev", "SOG", "Wrist", "Slap", "Snap", "Tip", "Deflect", "Missed", "Blocked", "Goals", "line1", "line2")
-schedule_info <- read_csv("./nhl_schedule.csv")
+#schedule_info <- read_csv("./data_collection/nhl_schedule.csv")
 
 
 # Gets all relevant info and puts this into a csv

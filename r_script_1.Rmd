@@ -13,14 +13,14 @@ library(foreach)
 library(data.table)
 
 source("data_processing.R")
-source("hockey_game_utils.R")
+#source("hockey_game_utils.R")
 source("parallel_hockey_utils.R")
 
-game_ids <- get_game_ids("shift_data")
 unregister_dopar() # get rid of all past clusters, do not want to blow up computer
 ```
 ```{r primary_data_collection}
 # primary data collection here, DO NOT run if already have data csvs 
+
 do_primary_collection()
 ```
 ```{r}

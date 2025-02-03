@@ -16,8 +16,10 @@ get_game_ids <- function(folder_name) {
     # we always have play-by-play, but not always shift_data. thus, get info abt shift and check for matching play_data
     new_path <- folder_name
     new_path <- paste(new_path, "/", sep="")
-    new_path <- paste("shift_data/", year, sep="")
+    #new_path <- paste("shift_data/", year, sep="")
+    new_path <- paste(new_path, year, sep="")
     new_path <- paste(new_path, "/", sep="")
+
     for(game in list.files(path=new_path)){
       game_ids <- c(game_ids, game)
     }
