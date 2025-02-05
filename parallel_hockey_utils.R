@@ -23,6 +23,7 @@ do_primary_collection <- function() {
     curr_yr_ids <- game_ids_df[game_ids_df$yr == yr,]$game_ids
     print(sprintf("Retrieved %s game ids for year %s --------------------------------", length(curr_yr_ids), yr))
     res <- get_all_info_parallel(yr, curr_yr_ids, debug=FALSE)
+    #return(res)
   }
 }
 
@@ -294,17 +295,18 @@ get_all_info_parallel <- function(year, fns, debug=FALSE) {
   unregister_dopar()
   
   print(sprintf("Calculating aggregate statistics...."))
-
-  player_agg <- agg_stats(results, year)
+  
+  player_agg <- agg_stats(results[results$TypeCode != "shift-change"], year)
+  #return(player_agg)
   #team_agg <- agg_stats_team(player_agg)
   
   file.create(sprintf("data_processing/%s_player_agg_df.csv", year))
   #file.create(sprintf("./%s_df/team_agg_df.csv", year))
-  file.create(sprintf("./%s_everything_df.csv", year))
+  file.create(sprintf("data_processing/%s_everything_df.csv", year))
   
   write.csv(player_agg, file=sprintf("data_processing/%s_player_agg_df.csv", year))
   #write.csv(team_agg, file=sprintf("./%s_df/team_agg_df.csv", year))
-  write.csv(results, file=sprintf("./%s_everything_df.csv", year))
+  write.csv(results, file=sprintf("data_processing/%s_everything_df.csv", year))
   
   if(debug) {
     print(results)
@@ -317,7 +319,7 @@ get_all_info_parallel <- function(year, fns, debug=FALSE) {
 
 # gets the aggregate statistics for each player
 agg_stats <- function(results, year) {
-  gen_plays <- results[results$TypeCode != "shift-change",]
+
   #ret_df <- data.frame(matrix(nrow = large_df_rows, ncol = length(player_info_colnames)))
   
   cl <- makeCluster(num_cores)
@@ -334,7 +336,7 @@ agg_stats <- function(results, year) {
                      .combine = 'rbind') %dopar% {
      player_id <- players[i]       
      rel_data <- results[results$PlayerIds == player_id, ]
-     curr_ret <- data.frame(matrix(nrow = 1, ncol = length(list_attrs)))
+     curr_ret <- data.frame(matrix(nrow = 1, ncol = 0))
      curr_ret$PlayerId <- player_id
      curr_ret$yr <- year
      curr_ret$TmAbbrev <- rel_data[1,TmAbbrev]
@@ -346,12 +348,12 @@ agg_stats <- function(results, year) {
      
      sogs <- rel_data[rel_data$TypeCode == "shot-on-goal",]
      curr_ret$SOG <- nrow(sogs)
-     curr_ret$Wrist <- nrow(sogs[sogs$details == "wrist",])
-     curr_ret$Snap <- nrow(sogs[sogs$details == "snap",])
-     curr_ret$Tip <- nrow(sogs[sogs$details == "tip",])
-     curr_ret$Back <- nrow(sogs[sogs$details == "backhand",])
-     curr_ret$Slap <- nrow(sogs[sogs$details == "slap",])
-     curr_ret$Deflected <- nrow(sogs[sogs$details == "deflected",])
+     curr_ret$Wrist <- nrow(sogs[sogs$Details == "wrist",])
+     curr_ret$Snap <- nrow(sogs[sogs$Details == "snap",])
+     curr_ret$Tip <- nrow(sogs[sogs$Details == "tip-in",])
+     curr_ret$Back <- nrow(sogs[sogs$Details == "backhand",])
+     curr_ret$Slap <- nrow(sogs[sogs$Details == "slap",])
+     curr_ret$Deflected <- nrow(sogs[sogs$Details == "deflected",])
      
      return(curr_ret)
   }

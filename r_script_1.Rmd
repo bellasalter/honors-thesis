@@ -20,15 +20,56 @@ unregister_dopar() # get rid of all past clusters, do not want to blow up comput
 ```
 ```{r primary_data_collection}
 # primary data collection here, DO NOT run if already have data csvs 
+do_primary_collection() 
+```
+```{r}
+player_agg_files <- list.files(path = "data_processing", 
+                          pattern = "*_player_agg_df.csv",
+                          recursive = TRUE,
+                          full.names = TRUE)
+player_aggs <- read_csv(player_agg_files[1])
+for(n in 2:length(player_agg_files)) {
+  player_aggs <- rbind(player_aggs, read_csv(player_agg_files[n]))
+}
+na.omit(player_aggs)
+for(i in 1:nrow(player_aggs)) {
+  curr_row <- player_aggs[i,]
 
-do_primary_collection()
+  if(!is.na(curr_row$TmAbbrev)) {
+    if(curr_row$TmAbbrev == "PHX") {
+      curr_row$TmAbbrev <- "ARI"
+    }
+  }
+}
+tm_aggs <- player_aggs %>% group_by(yr, TmAbbrev) %>%
+  summarise(across(c(SOG, Hits, Back, Wrist, Slap, Snap, Tip, Deflected, Missed, Blocked, G), sum))
+```
+```{r PCA_teams}
+only_num <- tm_aggs[c("Hits", "Blocked", "Missed", "Wrist", "Snap", "Back", "Tip", "Slap", "Deflected")]
+only_num_scaled <- scale(only_num)
+pca <- princomp(only_num_scaled)
+summary(pca)
+pca$loadings
+mod_data <- tm_aggs
+mod_data$BackR <- mod_data$Back / mod_data$SOG
+mod_data$WristR <- mod_data$Wrist / mod_data$SOG
+mod_data$SnapR <- mod_data$Snap / mod_data$SOG
+mod_data$SlapR <- mod_data$Slap / mod_data$SOG
+mod_data$TipR <- mod_data$Tip / mod_data$SOG
+mod <- lm(mod_data$G ~ mod_data$Hits +  mod_data$BackR + mod_data$WristR + mod_data$SnapR + mod_data$TipR + mod_data$SlapR )
+summary(mod)
+```
+```{r PCA}
+# PCA on player aggregate statistics, since we collected more reducing dimensionality would be great
+only_num <- player_aggs[c("Hits", "Blocked", "Missed", "Wrist", "Snap", "Back", "Tip", "Slap", "Deflected")]
+only_num_scaled <- scale(only_num)
+pca <- princomp(only_num_scaled)
+summary(pca)
+pca$loadings
+sum(pca$loadings[,1]^2)
 ```
 ```{r}
-res[res$TypeCode != "shift-change",]
-unique(res[res$TypeCode == "shot-on-goal",]$Details)
-```
-```{r}
-roster_files <- list.files(path = "player_data", 
+roster_files <- list.files(path = "data_collection/player_data", 
                           pattern = "\\.csv$",
                           recursive = TRUE,
                           full.names = TRUE)
@@ -75,6 +116,7 @@ get_player_profile(giant_df, big_player_df, "8474037")
 ```
 ```{r}
 library(lubridate)
+big_player_df <- player_aggs
 
 #get position and shoots catches
 pos <- c()
@@ -82,12 +124,12 @@ sc <- c()
 bd <- c()
 for(r in c(1:nrow(big_player_df))) {
   row <- big_player_df[r,]
-  if(row$PlayerId == 0) {
+  if(is.null(row$PlayerId)) {
     currPos <-"000"
     currsc <- "000"
     currbd <- 0000
   } else{
-    szn_check <- sprintf("%s%s", row$Szn, (as.numeric(row$Szn) + 1))
+    szn_check <- sprintf("%s%s", row$yr, (as.numeric(row$yr) + 1))
     selected <- complete_roster[complete_roster$season == szn_check & complete_roster$id == row$PlayerId,]
     currPos <- selected$positionCode[1]
     currsc <- selected$shootsCatches[1]
@@ -102,23 +144,89 @@ big_player_df$Pos <- pos
 big_player_df$shootsCatches <- sc
 big_player_df$birthDate <- bd
 
-player_counts_df <- big_player_df %>% group_by(Szn, PlayerId, tmAbbrev, shootsCatches, Pos, birthDate) %>%
-  summarise(across(c(SOG, Wrist, Slap, Snap, Tip, Deflect, Missed, Blocked, Goals, Hits), sum))
-player_counts_df$birthDate <- as.numeric(player_counts_df$birthDate)
-player_counts_df$Age <- player_counts_df$Szn - player_counts_df$birthDate
-player_counts_df <- player_counts_df[-1,] # !!important!! removes dummy player 000
-player_counts_df
+#player_counts_df <- big_player_df %>% group_by(yr, PlayerId, TmAbbrev, shootsCatches, Pos, birthDate) %>%
+  #summarise(across(c(SOG, Wrist, Slap, Snap, Tip, Deflected, Missed, Blocked, Goals, Hits), sum))
+
+  #player_counts_df$birthDate <- as.numeric(player_counts_df$birthDate)
+#player_counts_df$Age <- player_counts_df$Szn - player_counts_df$birthDate
+#player_counts_df <- player_counts_df[-1,] # !!important!! removes dummy player 000
+#player_counts_df
+```
+```{r PAM_cluster}
+library(cluster)
+library(factoextra)
+library(ggplot2)
+
+player_counts_df <- big_player_df
+player_counts_df$Age <- player_counts_df$yr - as.numeric(player_counts_df$birthDate)
+player_counts_df <- player_counts_df[player_counts_df$birthDate != 0,]
+forwards <- player_counts_df[player_counts_df$Pos == "L" | player_counts_df$Pos == "R" | player_counts_df$Pos == "C",]
+forwards <- na.omit(forwards)
+
+selected_columns <- c("forwards.PlayerId", "yr", "G")
+#to_train <- data.frame(forwards$Hits)
+to_train <- data.frame(forwards$PlayerId)
+to_train$yr = forwards$yr
+to_train$G <- forwards$G
+to_train$BlockR <- forwards$Blocked / forwards$SOG
+to_train$MissedR <- forwards$Missed / forwards$SOG
+to_train$WristR <- forwards$Wrist / forwards$SOG
+to_train$SnapR <- forwards$Snap / forwards$SOG
+to_train$TipR <- forwards$Tip / forwards$SOG
+to_train$BackR <- forwards$Back / forwards$SOG
+to_train$SlapR <- forwards$Slap / forwards$SOG
+to_train$DefR <- forwards$Deflected / forwards$SOG
+to_train <- na.omit(to_train)
+forwards_scale <- data.frame(scale(select(to_train, -selected_columns)))
+forwards_scale
+
+
+fviz_nbclust(forwards_scale, pam, method ="silhouette")+theme_minimal()
+
+#Looks like 2 clusters is the ticket
+kmeans_for <- pam(forwards_scale, k = 3)
+for_cluster <- factor(kmeans_for$cluster) 
+to_train$cluster <- for_cluster
+to_train$cluster <- as.numeric(for_cluster)
+to_train
 ```
 ```{r}
+cluster_1 <- to_train[to_train$cluster == 1,]
+hist(cluster_1$G)
+
+cluster_2 <- to_train[to_train$cluster == 2,]
+summary(cluster_2)
+hist(cluster_2$G)
+
+cluster_3<- to_train[to_train$cluster == 3,]
+summary(cluster_3)
+hist(cluster_3$G)
+
+
+```
+```{r}
+summary(cluster_1)
+summary(cluster_3)
+```
+```{r}
+summary(cluster_2)
+```
+```{r}
+player_counts_df <- big_player_df
+player_counts_df$Age <- player_counts_df$yr - as.numeric(player_counts_df$birthDate)
+player_counts_df <- player_counts_df[player_counts_df$birthDate != 0,]
 forwards <- player_counts_df[player_counts_df$Pos == "L" | player_counts_df$Pos == "R" | player_counts_df$Pos == "C",]
-selected_columns <- c("Slap", "Tip", "Hits", "Blocked", "Age", "SOG")
+forwards <- na.omit(forwards)
+
+selected_columns <- c("Hits", "Blocked", "Missed", "Wrist", "Snap", "Back", "Slap", "Deflected")
 forwards_scale <- data.frame(scale(forwards[,selected_columns]))
 
+forwards_scale <- na.omit(forwards_scale)
 test_df <- data.frame(matrix(ncol = 2, nrow = 10))
 colnames(test_df) <- c('k', 'ss')
 
 for(i in 1:10) { 
-  k_means <- kmeans(forwards_scale, centers = i, nstart = 20) 
+  k_means <- kmeans(forwards_scale, centers = i, nstart = 20, iter.max=30) 
   ss <- k_means$tot.withinss 
   test_df[i, 'k'] <- i  
   test_df[i, 'ss'] <- ss
@@ -126,23 +234,42 @@ for(i in 1:10) {
 ggplot(test_df, aes(x=k, y=ss)) + geom_point() + geom_line() + xlab("Clusters") + ylab("Sum of Squares in Cluster") + ggtitle("Sum of Squares per Cluster Size")
 
 #Looks like 5 clusters is the ticket
-kmeans_for <- kmeans(forwards_scale, centers = 7, nstart = 20)
+kmeans_for <- kmeans(forwards_scale, centers = 3, nstart = 20, iter.max=30)
 for_cluster <- factor(kmeans_for$cluster) 
-forwards$cluster <- for_cluster
+forwards_scale$cluster <- for_cluster
+forwards$cluster <- as.numeric(for_cluster)
 forwards
 ```
 ```{r}
+
+```
+```{r}
 # Let's look at performance of two teams in 2011, see if they have different distributions of clusters
-bos <- forwards[forwards$tmAbbrev =="BOS",]
-cbj <- forwards[forwards$tmAbbrev =="CBJ",]
+bos <- forwards[forwards$TmAbbrev =="BOS",]
+cbj <- forwards[forwards$TmAbbrev =="CBJ",]
+bos <- bos[bos$yr == "2011",]
+cbj <- cbj[cbj$yr == "2011",]
 bos$cluster
 cbj$cluster
 
 ggplot(data=bos, aes(cluster)) + geom_bar() + ggtitle("Frequencies of Clusters, BOS 2011")
 ggplot(data=cbj, aes(cluster)) + geom_bar() + ggtitle("Frequencies of Clusters, CBJ 2011")
-bos
+
+
 ```
 
+```{r}
+cluster_1 <- forwards[forwards$cluster == 1,]
+summary(cluster_1)
+```
+```{r PCA_2}
+# PCA on player aggregate statistics, since we collected more reducing dimensionality would be great
+only_num <- forwards[c("G", "A", "Hits", "Blocked", "Missed", "SOG", "Wrist", "Snap", "Back", "Slap", "Deflected", "cluster")]
+only_num_scaled <- scale(only_num)
+pca <- princomp(only_num_scaled)
+summary(pca)
+pca$loadings
+```
 ```{r}
 
 team_counts_df <- big_team_df %>% group_by(Szn, tmAbbrev) %>%
