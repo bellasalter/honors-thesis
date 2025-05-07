@@ -1,5 +1,6 @@
 
 # Thesis Code/Data Components
+Copyright 2025, Bella Salter, All rights reserved.
 
 ## 1. Webscraping Data Collection Pipeline in Python
 
